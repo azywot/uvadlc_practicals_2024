@@ -232,7 +232,7 @@ def plot_results(logging_dict: dict, epochs: int) -> None:
 
     plt.tight_layout()
     date = datetime.now().strftime("%Y-%m-%d")
-    filename = f"out/metrics_over_epochs_{date}.png"
+    filename = f"out/numpy_metrics_over_epochs_{date}.png"
     plt.savefig(filename)
 
 

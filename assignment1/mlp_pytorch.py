@@ -17,12 +17,11 @@
 This module implements a multi-layer perceptron (MLP) in PyTorch.
 You should fill in code into indicated sections.
 """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
+
+from collections import OrderedDict
 
 import torch.nn as nn
-from collections import OrderedDict
 
 
 class MLP(nn.Module):
@@ -59,7 +58,26 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        super(MLP, self).__init__()
+
+        self.layers = nn.ModuleList()
+        in_features = n_inputs
+
+        for out_features in n_hidden:
+
+            linear = nn.Linear(in_features, out_features)
+            nn.init.kaiming_normal_(linear.weight)
+            self.layers.append(linear)
+
+            if use_batch_norm:
+                self.layers.append(nn.BatchNorm1d(out_features))
+
+            self.layers.append(nn.ELU())
+            in_features = out_features
+
+        output_layer = nn.Linear(in_features, n_classes)
+        nn.init.kaiming_normal_(output_layer.weight)
+        self.layers.append(output_layer)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -81,7 +99,9 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        out = x
+        for layer in self.layers:
+            out = layer(out)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -94,4 +114,3 @@ class MLP(nn.Module):
         Returns the device on which the model is. Can be useful in some situations.
         """
         return next(self.parameters()).device
-

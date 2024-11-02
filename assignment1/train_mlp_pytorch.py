@@ -17,21 +17,21 @@
 This module implements training and evaluation of a multi-layer perceptron in PyTorch.
 You should fill in code into indicated sections.
 """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import argparse
-import numpy as np
 import os
 from copy import deepcopy
-from tqdm.auto import tqdm
-from mlp_pytorch import MLP
-import cifar10_utils
+from datetime import datetime
 
+import cifar10_utils
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from mlp_pytorch import MLP
+from tqdm.auto import tqdm
 
 
 def accuracy(predictions, targets):
@@ -55,7 +55,7 @@ def accuracy(predictions, targets):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    accuracy = (predictions.argmax(axis=1) == targets).float().mean().item()
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -83,7 +83,19 @@ def evaluate_model(model, data_loader):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    model.eval()
+    avg_accuracy = 0
+    denominator = 0
+    with torch.no_grad():
+        for inputs, targets in data_loader:
 
+            inputs = inputs.reshape(inputs.shape[0], -1)
+            inputs, targets = inputs.to(model.device), targets.to(model.device)
+            outputs = model(inputs).to(model.device)
+
+            avg_accuracy += accuracy(outputs, targets) * len(targets)
+            denominator += len(targets)
+    avg_accuracy /= denominator
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -134,27 +146,73 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
         torch.backends.cudnn.benchmark = False
 
     # Set default device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Loading the dataset
     cifar10 = cifar10_utils.get_cifar10(data_dir)
-    cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
-                                                  return_numpy=False)
+    cifar10_loader = cifar10_utils.get_dataloader(
+        cifar10, batch_size=batch_size, return_numpy=False
+    )
 
     #######################
     # PUT YOUR CODE HERE  #
     #######################
 
     # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
+    model = MLP(
+        n_inputs=3 * 32 * 32,
+        n_hidden=hidden_dims,
+        n_classes=10,
+        use_batch_norm=use_batch_norm,
+    ).to(device)
+    loss_module = nn.CrossEntropyLoss()
+
     # TODO: Training loop including validation
-    # TODO: Do optimization with the simple SGD optimizer
-    val_accuracies = ...
+    val_accuracies = []
+    train_losses = []
+    best_model = None
+    best_val_accuracy = -1
+    optimizer = optim.SGD(model.parameters(), lr=lr)
+
+    with tqdm(range(epochs), desc="MLP pytorch training") as p_bar:
+        for epoch in p_bar:
+            total_loss = 0
+            model.train()
+
+            for inputs, targets in cifar10_loader["train"]:
+
+                inputs, targets = inputs.to(device), targets.to(device)
+                inputs = inputs.reshape(inputs.shape[0], -1)
+
+                optimizer.zero_grad()
+                outputs = model(inputs)
+
+                loss = loss_module(outputs, targets)
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+
+            avg_epoch_loss = total_loss / len(cifar10_loader["train"])
+            train_losses.append(avg_epoch_loss)
+
+            # evaluate on validation set
+            val_accuracy = evaluate_model(model, cifar10_loader["validation"])
+            val_accuracies.append(val_accuracy)
+            if val_accuracy > best_val_accuracy:
+                best_val_accuracy = val_accuracy
+                best_model = deepcopy(model)
+
+            p_bar.set_postfix(val_acc=val_accuracy, avg_loss=avg_epoch_loss)
+
     # TODO: Test best model
-    test_accuracy = ...
+    test_accuracy = evaluate_model(best_model, cifar10_loader["test"])
     # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    logging_dict = {
+        "train_losses": train_losses,
+        "val_accuracies": val_accuracies,
+        "test_accuracy": test_accuracy,
+        "best_val_accuracy": best_val_accuracy,
+    }
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -162,32 +220,67 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     return model, val_accuracies, test_accuracy, logging_dict
 
 
-if __name__ == '__main__':
+def plot_results(logging_dict: dict, epochs: int) -> None:
+    """
+    Plot and save the results of the training process.
+    """
+
+    fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+    x = np.arange(1, epochs + 1)
+    axs[0].plot(x, logging_dict["val_accuracies"])
+    axs[0].set_xlabel("epoch")
+    axs[0].set_ylabel("validation accuracy")
+    axs[0].set_title("Validation accuracy over epochs")
+
+    axs[1].plot(x, logging_dict["train_losses"])
+    axs[1].set_xlabel("epoch")
+    axs[1].set_ylabel("average loss from all batches")
+    axs[1].set_title("Average loss over epochs")
+
+    plt.tight_layout()
+    date = datetime.now().strftime("%Y-%m-%d")
+    filename = f"out/pytorch_metrics_over_epochs_{date}.png"
+    plt.savefig(filename)
+
+
+if __name__ == "__main__":
     # Command line arguments
     parser = argparse.ArgumentParser()
 
     # Model hyperparameters
-    parser.add_argument('--hidden_dims', default=[128], type=int, nargs='+',
-                        help='Hidden dimensionalities to use inside the network. To specify multiple, use " " to separate them. Example: "256 128"')
-    parser.add_argument('--use_batch_norm', action='store_true',
-                        help='Use this option to add Batch Normalization layers to the MLP.')
+    parser.add_argument(
+        "--hidden_dims",
+        default=[128],
+        type=int,
+        nargs="+",
+        help='Hidden dimensionalities to use inside the network. To specify multiple, use " " to separate them. Example: "256 128"',
+    )
+    parser.add_argument(
+        "--use_batch_norm",
+        action="store_true",
+        help="Use this option to add Batch Normalization layers to the MLP.",
+    )
 
     # Optimizer hyperparameters
-    parser.add_argument('--lr', default=0.1, type=float,
-                        help='Learning rate to use')
-    parser.add_argument('--batch_size', default=128, type=int,
-                        help='Minibatch size')
+    parser.add_argument("--lr", default=0.1, type=float, help="Learning rate to use")
+    parser.add_argument("--batch_size", default=128, type=int, help="Minibatch size")
 
     # Other hyperparameters
-    parser.add_argument('--epochs', default=10, type=int,
-                        help='Max number of epochs')
-    parser.add_argument('--seed', default=42, type=int,
-                        help='Seed to use for reproducing results')
-    parser.add_argument('--data_dir', default='data/', type=str,
-                        help='Data directory where to store/find the CIFAR10 dataset.')
+    parser.add_argument("--epochs", default=10, type=int, help="Max number of epochs")
+    parser.add_argument(
+        "--seed", default=42, type=int, help="Seed to use for reproducing results"
+    )
+    parser.add_argument(
+        "--data_dir",
+        default="data/",
+        type=str,
+        help="Data directory where to store/find the CIFAR10 dataset.",
+    )
 
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
+    model, val_accuracies, test_accuracy, logging_dict = train(**kwargs)
+    print(logging_dict)
     # Feel free to add any additional functions, such as plotting of the loss curve here
+    plot_results(logging_dict, args.epochs)
