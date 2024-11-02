@@ -17,9 +17,7 @@
 This module implements a multi-layer perceptron (MLP) in NumPy.
 You should fill in code into indicated sections.
 """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 from modules import *
 
@@ -52,7 +50,28 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.n_inputs = n_inputs
+        self.n_hidden = n_hidden
+        self.n_classes = n_classes
+
+        if len(n_hidden) == 0:
+            self.layers = [
+                LinearModule(n_inputs, n_classes),
+            ]
+        else:
+            self.layers = [
+                LinearModule(n_inputs, n_hidden[0], True),
+                ELUModule(alpha=1.0),
+            ]  # alpha=1.0 is default in PyTorch
+
+            for i in range(len(n_hidden) - 1):
+                self.layers.append(LinearModule(n_hidden[i], n_hidden[i + 1]))
+                self.layers.append(ELUModule(alpha=1.0))
+
+            # output layer
+            self.layers.append(LinearModule(n_hidden[-1], n_classes))
+
+        self.softmax = SoftMaxModule()
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -74,7 +93,10 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        out = x
+        for layer in self.layers:
+            out = layer.forward(out)
+        out = self.softmax.forward(out)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -95,7 +117,9 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        dout = self.softmax.backward(dout)
+        for layer in reversed(self.layers):
+            dout = layer.backward(dout)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -112,7 +136,8 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        for layer in self.layers:
+            layer.clear_cache()
         #######################
         # END OF YOUR CODE    #
         #######################
