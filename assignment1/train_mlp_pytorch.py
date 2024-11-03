@@ -95,6 +95,7 @@ def evaluate_model(model, data_loader):
 
             avg_accuracy += accuracy(outputs, targets) * len(targets)
             denominator += len(targets)
+
     avg_accuracy /= denominator
     #######################
     # END OF YOUR CODE    #
@@ -177,6 +178,7 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     with tqdm(range(epochs), desc="MLP pytorch training") as p_bar:
         for epoch in p_bar:
             total_loss = 0
+            total_loss_denominator = 0
             model.train()
 
             for inputs, targets in cifar10_loader["train"]:
@@ -190,9 +192,11 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
                 loss = loss_module(outputs, targets)
                 loss.backward()
                 optimizer.step()
-                total_loss += loss.item()
 
-            avg_epoch_loss = total_loss / len(cifar10_loader["train"])
+                total_loss += loss.item() * len(targets)
+                total_loss_denominator += len(targets)
+
+            avg_epoch_loss = total_loss / total_loss_denominator
             train_losses.append(avg_epoch_loss)
 
             # evaluate on validation set

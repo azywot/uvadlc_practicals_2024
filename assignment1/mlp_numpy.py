@@ -54,23 +54,16 @@ class MLP(object):
         self.n_hidden = n_hidden
         self.n_classes = n_classes
 
-        if len(n_hidden) == 0:
-            self.layers = [
-                LinearModule(n_inputs, n_classes),
-            ]
-        else:
-            self.layers = [
-                LinearModule(n_inputs, n_hidden[0], True),
-                ELUModule(alpha=1.0),
-            ]  # alpha=1.0 is default in PyTorch
+        self.layers = []
+        input_dim = n_inputs
 
-            for i in range(len(n_hidden) - 1):
-                self.layers.append(LinearModule(n_hidden[i], n_hidden[i + 1]))
-                self.layers.append(ELUModule(alpha=1.0))
+        for hidden_units in n_hidden:
 
-            # output layer
-            self.layers.append(LinearModule(n_hidden[-1], n_classes))
+            self.layers.append(LinearModule(input_dim, hidden_units, True))
+            self.layers.append(ELUModule(alpha=1.0))
+            input_dim = hidden_units
 
+        self.layers.append(LinearModule(input_dim, n_classes))
         self.softmax = SoftMaxModule()
         #######################
         # END OF YOUR CODE    #

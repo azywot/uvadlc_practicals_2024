@@ -61,21 +61,21 @@ class MLP(nn.Module):
         super(MLP, self).__init__()
 
         self.layers = nn.ModuleList()
-        in_features = n_inputs
+        input_dim = n_inputs
 
-        for out_features in n_hidden:
+        for hidden_units in n_hidden:
 
-            linear = nn.Linear(in_features, out_features)
+            linear = nn.Linear(input_dim, hidden_units)
             nn.init.kaiming_normal_(linear.weight)
             self.layers.append(linear)
 
             if use_batch_norm:
-                self.layers.append(nn.BatchNorm1d(out_features))
+                self.layers.append(nn.BatchNorm1d(hidden_units))
 
             self.layers.append(nn.ELU())
-            in_features = out_features
+            input_dim = hidden_units
 
-        output_layer = nn.Linear(in_features, n_classes)
+        output_layer = nn.Linear(input_dim, n_classes)
         nn.init.kaiming_normal_(output_layer.weight)
         self.layers.append(output_layer)
         #######################

@@ -158,6 +158,7 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     with tqdm(range(epochs), desc="MLP numpy training") as p_bar:
         for epoch in p_bar:
             total_loss = 0
+            total_loss_denominator = 0
             num_batches = 0
 
             for x, y in cifar10_loader["train"]:
@@ -182,10 +183,11 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
                         for param_name, param in layer.params.items():
                             param -= lr * layer.grads[param_name]
 
-                total_loss += loss
+                total_loss += loss * len(y)
+                total_loss_denominator += len(y)
                 num_batches += 1
 
-            avg_epoch_loss = total_loss / num_batches
+            avg_epoch_loss = total_loss / total_loss_denominator
             train_losses.append(avg_epoch_loss)
 
             # evaluate on validation set
