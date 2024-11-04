@@ -153,7 +153,7 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     val_accuracies = []
     train_losses = []
     best_model = None
-    best_val_accuracy = -1  # set to -1 to not have to check for first iteration
+    best_val_accuracy = -1
 
     with tqdm(range(epochs), desc="MLP numpy training") as p_bar:
         for epoch in p_bar:

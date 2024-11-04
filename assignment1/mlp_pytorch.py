@@ -60,24 +60,26 @@ class MLP(nn.Module):
         #######################
         super(MLP, self).__init__()
 
-        self.layers = nn.ModuleList()
+        layers = []
         input_dim = n_inputs
 
         for hidden_units in n_hidden:
 
             linear = nn.Linear(input_dim, hidden_units)
             nn.init.kaiming_normal_(linear.weight)
-            self.layers.append(linear)
+            layers.append(linear)
 
             if use_batch_norm:
-                self.layers.append(nn.BatchNorm1d(hidden_units))
+                layers.append(nn.BatchNorm1d(hidden_units))
 
-            self.layers.append(nn.ELU())
+            layers.append(nn.ELU())
             input_dim = hidden_units
 
         output_layer = nn.Linear(input_dim, n_classes)
         nn.init.kaiming_normal_(output_layer.weight)
-        self.layers.append(output_layer)
+        layers.append(output_layer)
+        
+        self.layers = nn.Sequential(*layers)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -99,9 +101,7 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        out = x
-        for layer in self.layers:
-            out = layer(out)
+        out = self.layers(x)
         #######################
         # END OF YOUR CODE    #
         #######################
