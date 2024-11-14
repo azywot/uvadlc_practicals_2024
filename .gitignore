@@ -1,3 +1,5 @@
 assignment1/data/*
+assignment2/part1/data/*
+*.pth
 *.pyc
 *.png
