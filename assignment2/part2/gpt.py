@@ -42,6 +42,8 @@ class RMSNorm(nn.Module):
     def forward(self, x):
         # Compute the norm of the input tensor and divide by the norm
         # Scale the normalized tensor by the learned weight parameter
+        # TODO
+        output = ...    
         return output
 
 class CausalSelfAttention(nn.Module):
@@ -130,11 +132,13 @@ class CausalSelfAttention(nn.Module):
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         # Split output of attention-head in query, key and value
-        q, k ,v  = ...
+        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        # print(q.shape, k.shape, v.shape)
 
-        q = ...
-        k = ...
-        v = ...
+        # nh -> n_head, hs -> head_size
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
         if not self.config.abs_emb:
             q, k = self.apply_rotary_emb(q, k, T)
@@ -144,13 +148,21 @@ class CausalSelfAttention(nn.Module):
         # Mask the calculated attention weights with the mask parameter.
 
         if self.use_flash_attn:
-            y = ...
+            # TODO
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, self.mask)
+            
         else:
             # Compute attention scores
-            att = ... 
+            att = (q @ k.transpose(-2, -1)) / math.sqrt(k.size(-1)) # (B, nh, T, T)
+
             # Apply causal mask
+            att = att.masked_fill(self.mask[:, :, :T, :T] == 0, float('-inf')) # lower triangular mask
+            att = F.softmax(att, dim=-1) # (B, nh, T, T)
+            att = self.attn_dropout(att)
+
             # Apply attention to the values
-            y = ... # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
