@@ -166,7 +166,6 @@ class CausalSelfAttention(nn.Module):
         # Mask the calculated attention weights with the mask parameter.
 
         if self.use_flash_attn:
-            # TODO
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, self.mask)
 
         else:
@@ -495,24 +494,41 @@ class GPT(nn.Module):
             idx_cond = idx if idx.size(1) <= self.block_size else idx[:, -self.block_size:]
 
             # forward the model to get the logits for the index in the sequence
+            logits = self(idx_cond) # Shape: (batch_size, sequence_length, vocab_size)
             # pluck the logits at the final step and scale by desired temperature
+            logits = logits[:, -1, :] / temperature
 
             if not do_sample:
                 # take the most likely token
-                idx_next = ...
+                idx_next = torch.argmax(logits, dim=-1, keepdim=True)
             
             else:
                 # apply softmax to convert logits to (normalized) probabilities
+                probs = F.softmax(logits, dim=-1)
 
                 # optionally only consider top-k logits for sampling. 
                 if top_k is not None:
-                    pass
+                    top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
+                    probs = torch.zeros_like(probs).scatter_(-1, top_k_indices, top_k_probs)
 
                 # optionally apply top-p sampling
                 if top_p is not None:
-                    pass
+                    sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+                    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                    sorted_probs[cumulative_probs > top_p] = 0
+                    probs = torch.zeros_like(probs).scatter_(-1, sorted_indices, sorted_probs)
+                
+                # # normalize the probabilities
+                # if top_k is not None or top_p is not None:
+                #     probs = probs / probs.sum(dim=-1, keepdim=True)
+
+                # NOTE: actually not needed since according to the docs (torch.multinomial):
+                # The rows of input do not need to sum to one (in which case we use the values as weights), 
+                # but must be non-negative, finite and have a non-zero sum.
+
+                idx_next = torch.multinomial(probs, num_samples=1)
             
             # append sampled index to the running sequence and continue
-            idx = ...
+            idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
