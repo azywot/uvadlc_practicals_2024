@@ -114,28 +114,21 @@ class CausalSelfAttention(nn.Module):
         """
         # Generate RoPE embeddings dynamically based on T
         seq_pos = torch.arange(T, device=xq.device, dtype=xq.dtype)  # Shape: (T)
-        dim = xq.size(-1)
-        freqs = torch.arange(
-            0, dim // 2, dtype=torch.float32, device=xq.device
-        )  # Shape: (dim // 2)
-        freqs = 1.0 / (10000 ** (2 * freqs / dim))
+        freqs = self.inv_freq  # Shape: (dim // 2) TODO: should be (T, dim // 2) according to the repo
+        # print("freqs", freqs.shape)
         # For each position and frequency compute position-dependent angle
-        pos_emb = seq_pos[:, None] * freqs[None, :]  # Shape: (T, dim // 2)
+        pos_emb = (
+            (seq_pos[:, None] * freqs[None, :]).unsqueeze(0).unsqueeze(0)
+        )  # Shape: (1, 1, T, dim//2), TODO: should be (1, 1, T, dim) according to the repo
         # print("pos_emb", pos_emb.shape)
 
         # Split pos into sin and cos components, repeating each to match xq and xk dimensions
-        pos_sin = (
-            pos_emb.sin()
-            .unsqueeze(0)
-            .unsqueeze(0)
-            .expand(xq.shape[0], xq.shape[1], -1, -1)
-        )
-        pos_cos = (
-            pos_emb.cos()
-            .unsqueeze(0)
-            .unsqueeze(0)
-            .expand(xq.shape[0], xq.shape[1], -1, -1)
-        )
+        pos_sin = pos_emb.sin().expand(
+            xq.shape[0], xq.shape[1], -1, -1
+        )  # Shape: (batch, num_heads, T, dim // 2)
+        pos_cos = pos_emb.cos().expand(
+            xq.shape[0], xq.shape[1], -1, -1
+        )  # Shape: (batch, num_heads, T, dim // 2)
         # print("pos_sin", pos_sin.shape)
         # print("pos_cos", pos_cos.shape)
 
@@ -175,7 +168,7 @@ class CausalSelfAttention(nn.Module):
         if self.use_flash_attn:
             # TODO
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, self.mask)
-            
+
         else:
             # Compute attention scores
             att = (q @ k.transpose(-2, -1)) / math.sqrt(k.size(-1)) # (B, nh, T, T)
