@@ -10,12 +10,11 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 
 import math
 from argparse import Namespace
+from typing import Tuple
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from typing import Tuple
-
 
 
 class BERTGELU(nn.Module):
@@ -42,8 +41,11 @@ class RMSNorm(nn.Module):
     def forward(self, x):
         # Compute the norm of the input tensor and divide by the norm
         # Scale the normalized tensor by the learned weight parameter
-        # TODO
-        output = ...    
+        output = (
+            x
+            / torch.sqrt(torch.mean(x**2, dim=-1, keepdim=True) + self.eps)
+            * self.weight
+        )
         return output
 
 class CausalSelfAttention(nn.Module):
@@ -111,22 +113,45 @@ class CausalSelfAttention(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]: Tuple containing the modified query and key tensors.
         """
         # Generate RoPE embeddings dynamically based on T
-        seq_pos = ...  # Shape: (T)
-        freqs = ...    # Shape: (T, dim // 2)
-        pos_emb = ...  # Shape: (1, 1, T, dim)
-        
+        seq_pos = torch.arange(T, device=xq.device, dtype=xq.dtype)  # Shape: (T)
+        dim = xq.size(-1)
+        freqs = torch.arange(
+            0, dim // 2, dtype=torch.float32, device=xq.device
+        )  # Shape: (dim // 2)
+        freqs = 1.0 / (10000 ** (2 * freqs / dim))
+        # For each position and frequency compute position-dependent angle
+        pos_emb = seq_pos[:, None] * freqs[None, :]  # Shape: (T, dim // 2)
+        # print("pos_emb", pos_emb.shape)
+
         # Split pos into sin and cos components, repeating each to match xq and xk dimensions
-        pos_sin = ...
-        pos_cos = ...
-        
+        pos_sin = (
+            pos_emb.sin()
+            .unsqueeze(0)
+            .unsqueeze(0)
+            .expand(xq.shape[0], xq.shape[1], -1, -1)
+        )
+        pos_cos = (
+            pos_emb.cos()
+            .unsqueeze(0)
+            .unsqueeze(0)
+            .expand(xq.shape[0], xq.shape[1], -1, -1)
+        )
+        # print("pos_sin", pos_sin.shape)
+        # print("pos_cos", pos_cos.shape)
+
         # Apply RoPE transformation: pair and rotate dimensions
         # Rotate query and key tensors
-        xq_rot = ...
-        xk_rot = ...
-        raise NotImplementedError
-        
+        xq1, xq2 = xq.chunk(2, dim=-1)
+        xk1, xk2 = xk.chunk(2, dim=-1)
+        xq_rot = torch.cat(
+            [xq1 * pos_cos - xq2 * pos_sin, xq1 * pos_sin + xq2 * pos_cos], dim=-1
+        )
+        xk_rot = torch.cat(
+            [xk1 * pos_cos - xk2 * pos_sin, xk1 * pos_sin + xk2 * pos_cos], dim=-1
+        )
+
         return xq_rot, xk_rot
-        
+
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
@@ -195,11 +220,28 @@ class TransformerDecoderBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
         # Initialize the layers
-        raise NotImplementedError
+        self.layer_norm_1 = RMSNorm(config.n_embd)
+        self.self_attention = CausalSelfAttention(config)
+        self.layer_norm_2 = RMSNorm(config.n_embd)
+        self.mlpf = nn.Sequential(
+            nn.Linear(config.n_embd, 4 * config.n_embd),
+            BERTGELU(),
+            nn.Linear(4 * config.n_embd, config.n_embd),
+            nn.Dropout(config.resid_pdrop)
+        )
+
     def forward(self, x):
         # Forward pass through the Decoder Layer
-        out = ...
-        return out
+        # TODO: check with the TA
+        out = self.layer_norm_1(x)
+        out = self.self_attention(out)
+        out = x + out 
+
+        out2 = self.layer_norm_2(out)
+        out2 = self.mlpf(out2)
+        out2 = out + out2
+
+        return out2
 
 
 class GPT(nn.Module):
@@ -403,7 +445,8 @@ class GPT(nn.Module):
         # Forward token and position embedders
         # token embeddings of shape (b, t, n_embd)
         # apply dropout to the tokens
-        tok_emb = ...
+        tok_emb = self.transformer.w_token_emb(idx)
+        tok_emb = self.transformer.drop(tok_emb)
 
         if self.config.abs_emb:
             pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
@@ -413,8 +456,10 @@ class GPT(nn.Module):
             x = tok_emb
 
         # Iterate through the transformer blocks
+        for block in self.transformer.h:
+            x = block(x)
         # Apply final layer normalization and linear layer to produce logits
-        logits = ...
+        logits = self.lm_head(self.transformer.ln_f(x))
 
         return logits
 
