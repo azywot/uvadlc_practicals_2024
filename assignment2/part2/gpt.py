@@ -114,11 +114,14 @@ class CausalSelfAttention(nn.Module):
         """
         # Generate RoPE embeddings dynamically based on T
         seq_pos = torch.arange(T, device=xq.device, dtype=xq.dtype)  # Shape: (T)
-        freqs = self.inv_freq  # Shape: (dim // 2) TODO: should be (T, dim // 2) according to the repo
+        # print("*" * 10, "xq", xq.shape, "*" * 10)
+        # print("NOTE: Query tensor of shape [batch, num_heads, seq_len, head_dim]")
+        # print("seq", seq_pos.shape)
+        freqs = self.inv_freq.to(xq.device).unsqueeze(0) # Shape: (T, dim // 2)
         # print("freqs", freqs.shape)
         # For each position and frequency compute position-dependent angle
         pos_emb = (
-            (seq_pos[:, None] * freqs[None, :]).unsqueeze(0).unsqueeze(0)
+            (seq_pos[:, None] * freqs[None, :]).unsqueeze(0) 
         )  # Shape: (1, 1, T, dim//2), TODO: should be (1, 1, T, dim) according to the repo
         # print("pos_emb", pos_emb.shape)
 
@@ -134,8 +137,8 @@ class CausalSelfAttention(nn.Module):
 
         # Apply RoPE transformation: pair and rotate dimensions
         # Rotate query and key tensors
-        xq1, xq2 = xq.chunk(2, dim=-1)
-        xk1, xk2 = xk.chunk(2, dim=-1)
+        xq1, xq2 = xq[..., ::2], xq[..., 1::2]
+        xk1, xk2 = xk[..., ::2], xk[..., 1::2]
         xq_rot = torch.cat(
             [xq1 * pos_cos - xq2 * pos_sin, xq1 * pos_sin + xq2 * pos_cos], dim=-1
         )
