@@ -117,7 +117,8 @@ class CausalSelfAttention(nn.Module):
         # print("*" * 10, "xq", xq.shape, "*" * 10)
         # print("NOTE: Query tensor of shape [batch, num_heads, seq_len, head_dim]")
         # print("seq", seq_pos.shape)
-        freqs = self.inv_freq.to(xq.device).unsqueeze(0) # Shape: (T, dim // 2)
+        freqs = torch.arange(0, xq.size(-1) // 2, dtype=torch.float32, device=xq.device)  # Shape: (dim // 2)
+        freqs = (1.0 / (10000 ** (freqs / (xq.size(-1) // 2)))).unsqueeze(0) # Shape: (T, dim // 2)
         # print("freqs", freqs.shape)
         # For each position and frequency compute position-dependent angle
         pos_emb = (
@@ -137,13 +138,14 @@ class CausalSelfAttention(nn.Module):
 
         # Apply RoPE transformation: pair and rotate dimensions
         # Rotate query and key tensors
-        xq1, xq2 = xq[..., ::2], xq[..., 1::2]
-        xk1, xk2 = xk[..., ::2], xk[..., 1::2]
+        xq1, xq2 = xq[..., : xq.size(-1) // 2], xq[..., xq.size(-1) // 2 :]
+        xk1, xk2 = xk[..., : xk.size(-1) // 2], xk[..., xk.size(-1) // 2 :]
+
         xq_rot = torch.cat(
-            [xq1 * pos_cos - xq2 * pos_sin, xq1 * pos_sin + xq2 * pos_cos], dim=-1
+            [pos_cos * xq1 - pos_sin * xq2, pos_sin * xq1 + pos_cos * xq2], dim=-1
         )
         xk_rot = torch.cat(
-            [xk1 * pos_cos - xk2 * pos_sin, xk1 * pos_sin + xk2 * pos_cos], dim=-1
+            [pos_cos * xk1 - pos_sin * xk2, pos_sin * xk1 + pos_cos * xk2], dim=-1
         )
 
         return xq_rot, xk_rot
@@ -230,13 +232,13 @@ class TransformerDecoderBlock(nn.Module):
         # TODO: check with the TA
         out = self.layer_norm_1(x)
         out = self.self_attention(out)
-        out = x + out 
+        out = out + x
 
-        out2 = self.layer_norm_2(out)
-        out2 = self.mlpf(out2)
-        out2 = out + out2
+        out = self.layer_norm_2(out)
+        out = self.mlpf(out)
+        out = out + x
 
-        return out2
+        return out
 
 
 class GPT(nn.Module):
@@ -511,15 +513,17 @@ class GPT(nn.Module):
 
                 # optionally only consider top-k logits for sampling. 
                 if top_k is not None:
-                    top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
-                    probs = torch.zeros_like(probs).scatter_(-1, top_k_indices, top_k_probs)
+                    pass
+                    # top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
+                    # probs = torch.zeros_like(probs).scatter_(-1, top_k_indices, top_k_probs)
 
                 # optionally apply top-p sampling
                 if top_p is not None:
-                    sorted_probs, sorted_indices = torch.sort(probs, descending=True)
-                    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-                    sorted_probs[cumulative_probs > top_p] = 0
-                    probs = torch.zeros_like(probs).scatter_(-1, sorted_indices, sorted_probs)
+                    pass
+                    # sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+                    # cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                    # sorted_probs[cumulative_probs > top_p] = 0
+                    # probs = torch.zeros_like(probs).scatter_(-1, sorted_indices, sorted_probs)
                 
                 # # normalize the probabilities
                 # if top_k is not None or top_p is not None:
