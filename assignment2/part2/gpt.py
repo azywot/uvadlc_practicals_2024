@@ -114,8 +114,6 @@ class CausalSelfAttention(nn.Module):
         """
         # Generate RoPE embeddings dynamically based on T
         seq_pos = torch.arange(T, device=xq.device, dtype=xq.dtype)  # Shape: (T)
-        # print("*" * 10, "xq", xq.shape, "*" * 10)
-        # print("NOTE: Query tensor of shape [batch, num_heads, seq_len, head_dim]")
         # print("seq", seq_pos.shape)
         freqs = torch.arange(0, xq.size(-1) // 2, dtype=torch.float32, device=xq.device)  # Shape: (dim // 2)
         freqs = (1.0 / (10000 ** (freqs / (xq.size(-1) // 2)))).unsqueeze(0) # Shape: (T, dim // 2)
@@ -123,7 +121,7 @@ class CausalSelfAttention(nn.Module):
         # For each position and frequency compute position-dependent angle
         pos_emb = (
             (seq_pos[:, None] * freqs[None, :]).unsqueeze(0) 
-        )  # Shape: (1, 1, T, dim//2), TODO: should be (1, 1, T, dim) according to the repo
+        )  # Shape: (1, 1, T, dim//2)
         # print("pos_emb", pos_emb.shape)
 
         # Split pos into sin and cos components, repeating each to match xq and xk dimensions
@@ -171,7 +169,8 @@ class CausalSelfAttention(nn.Module):
         # Mask the calculated attention weights with the mask parameter.
 
         if self.use_flash_attn:
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, self.mask)
+            adjusted_mask = self.mask[:, :, :T, :T].expand(B, self.n_head, T, T)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, adjusted_mask)
 
         else:
             # Compute attention scores
@@ -229,7 +228,6 @@ class TransformerDecoderBlock(nn.Module):
 
     def forward(self, x):
         # Forward pass through the Decoder Layer
-        # TODO: check with the TA
         out = self.layer_norm_1(x)
         out = self.self_attention(out)
         out = out + x
