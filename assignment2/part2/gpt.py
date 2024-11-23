@@ -491,6 +491,10 @@ class GPT(nn.Module):
             torch.LongTensor: The tensor of token indices including the original and the newly generated 
                                 tokens, with shape (batch size, sequence length + max_new_tokens).
         """
+        if top_p is not None:
+            if top_p <= 0.0 or top_p > 1.0:
+                top_p = None
+                
         assert not (top_k and top_p), "You can only use one of top_k or top_p sampling"
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
@@ -499,7 +503,8 @@ class GPT(nn.Module):
             # forward the model to get the logits for the index in the sequence
             logits = self(idx_cond) # Shape: (batch_size, sequence_length, vocab_size)
             # pluck the logits at the final step and scale by desired temperature
-            logits = logits[:, -1, :] / temperature
+            logits = logits[:, -1, :] / max(temperature, 1e-8) # for numerical stability
+            logits = torch.clamp(logits, -100, 100) # for numerical stability
 
             if not do_sample:
                 # take the most likely token
@@ -511,25 +516,30 @@ class GPT(nn.Module):
 
                 # optionally only consider top-k logits for sampling. 
                 if top_k is not None:
-                    pass
-                    # top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
-                    # probs = torch.zeros_like(probs).scatter_(-1, top_k_indices, top_k_probs)
+                    top_k_values, top_k_indices = torch.topk(probs, top_k, dim=-1)
+                    mask = torch.zeros_like(probs, dtype=torch.bool).scatter_(-1, top_k_indices, 1)
+                    probs[~mask] = 0  # zero out non-top-k probabilities
 
                 # optionally apply top-p sampling
                 if top_p is not None:
-                    pass
-                    # sorted_probs, sorted_indices = torch.sort(probs, descending=True)
-                    # cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-                    # sorted_probs[cumulative_probs > top_p] = 0
-                    # probs = torch.zeros_like(probs).scatter_(-1, sorted_indices, sorted_probs)
-                
-                # # normalize the probabilities
+                    sorted_probs, sorted_indices = torch.sort(probs, descending=True, dim=-1)
+                    cumsum_probs = torch.cumsum(sorted_probs, dim=-1)
+                    cutoff_indices = (cumsum_probs > top_p).long().argmax(dim=-1, keepdim=True)
+                    mask = torch.arange(probs.size(-1), device=probs.device).unsqueeze(0) <= cutoff_indices
+                    mask = mask.scatter(-1, sorted_indices, mask)
+                    probs = probs * mask.float()
+
+                # numerical stability check for probs
+                if torch.isnan(probs).any():
+                    raise ValueError("NaNs detected in probabilities!")
+
+                # NOTE: actually not needed to re=normalize, since according to: https://pytorch.org/docs/stable/generated/torch.multinomial.html:
+                # The rows of input do not need to sum to one (in which case we use the values as weights),
+                # but must be non-negative, finite and have a non-zero sum.
+
+                # normalize the probabilities
                 # if top_k is not None or top_p is not None:
                 #     probs = probs / probs.sum(dim=-1, keepdim=True)
-
-                # NOTE: actually not needed since according to the docs (torch.multinomial):
-                # The rows of input do not need to sum to one (in which case we use the values as weights), 
-                # but must be non-negative, finite and have a non-zero sum.
 
                 idx_next = torch.multinomial(probs, num_samples=1)
             

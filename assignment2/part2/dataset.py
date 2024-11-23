@@ -7,7 +7,8 @@ from torch.utils.data import Dataset
 
 class CharTokenizer:
     def __init__(self, datafile_path: str, return_tensors: bool = False):
-        with open(datafile_path, 'r') as file:
+        # with open(datafile_path, 'r') as file:
+        with open(datafile_path, "rt", encoding="utf8", errors="ignore") as file:
             data = file.read()
         chars = sorted(set(data))
         data_size, vocab_size = len(data), len(chars)
@@ -69,7 +70,8 @@ class TextDataset(Dataset):
         # Load text data
         # With BIG datasets, NEVER do this, unless you happen to have terrabytes of RAM.
         # The typical way to do this with big datasets is to pre-tokenize and save the tokenized files, then lazily load as needed.
-        with open(datafile_path, 'r') as file:
+        # with open(datafile_path, 'r') as file:
+        with open(datafile_path, "rt", encoding="utf8", errors="ignore") as file:
             data = file.read()
         self.tokenizer = tokenizer
 
