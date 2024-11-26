@@ -169,8 +169,9 @@ class CausalSelfAttention(nn.Module):
         # Mask the calculated attention weights with the mask parameter.
 
         if self.use_flash_attn:
-            adjusted_mask = self.mask[:, :, :T, :T].expand(B, self.n_head, T, T)
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, adjusted_mask)
+            y = torch.nn.functional.scaled_dot_product_attention(
+                query=q, key=k, value=v, dropout_p=self.attn_dropout.p, is_causal=True
+            )
 
         else:
             # Compute attention scores
