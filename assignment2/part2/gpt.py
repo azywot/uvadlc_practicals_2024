@@ -495,6 +495,7 @@ class GPT(nn.Module):
         if top_p is not None:
             if top_p <= 0.0 or top_p > 1.0:
                 top_p = None
+        self.eval() # set the model to evaluation mode (dropout layers behave differently)
                 
         assert not (top_k and top_p), "You can only use one of top_k or top_p sampling"
         for _ in range(max_new_tokens):
