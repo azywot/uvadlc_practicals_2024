@@ -548,4 +548,5 @@ class GPT(nn.Module):
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 
+        self.train() # set the model back to training mode
         return idx
