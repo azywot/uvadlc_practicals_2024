@@ -100,7 +100,7 @@ class VAE(pl.LightningModule):
         logits = self.decoder(z)
         probs = F.softmax(logits, dim=1)
         B, C, H, W = probs.shape
-        probs = probs.permute(0, 2, 3, 1).reshape(-1, C)  # shape: (B, H, W, C)
+        probs = probs.permute(0, 2, 3, 1)  # shape: (B, H, W, C)
         x_samples = torch.multinomial(probs, 1).reshape(-1, H, W, 1) # shape: (B, H, W, 1)
         x_samples = x_samples.permute(0, 3, 1, 2)  # shape: (B, 1, H, W)
         #######################
