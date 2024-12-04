@@ -30,13 +30,15 @@ def sample_reparameterize(mean, std):
         z - A sample of the distributions, with gradient support for both mean and std.
             The tensor should have the same shape as the mean and std input tensors.
     """
-    assert not (std < 0).any().item(), "The reparameterization trick got a negative std as input. " + \
-                                       "Are you sure your input is std and not log_std?"
+    assert not (std < 0).any().item(), (
+        "The reparameterization trick got a negative std as input. "
+        + "Are you sure your input is std and not log_std?"
+    )
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    z = None
-    raise NotImplementedError
+    eps = torch.randn_like(mean, device=mean.device)
+    z = mean + std * eps
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -58,8 +60,7 @@ def KLD(mean, log_std):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    KLD = None
-    raise NotImplementedError
+    KLD = 0.5 * torch.sum((torch.exp(2 * log_std) + mean**2 - 1 - 2 * log_std), dim=-1)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -78,8 +79,7 @@ def elbo_to_bpd(elbo, img_shape):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    bpd = None
-    raise NotImplementedError
+    bpd = elbo * np.log2(np.e) / np.prod(img_shape[1:])
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -110,11 +110,31 @@ def visualize_manifold(decoder, grid_size=20):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    img_grid = None
-    raise NotImplementedError
+    percentiles = torch.linspace(
+        0.5 / grid_size, (grid_size - 0.5) / grid_size, grid_size
+    )
+
+    z = torch.distributions.Normal(0, 1).icdf(
+        percentiles
+    )  # TODO: check if this is correct
+    z1, z2 = torch.meshgrid([z, z])
+    z_grid = torch.stack([z1.flatten(), z2.flatten()], dim=-1) # shape: (grid_size**2, 2)
+
+    logits = decoder(z_grid) # shape: (grid_size**2, 16, 28, 28)
+    probs = torch.nn.functional.softmax(logits, dim=1)
+    probs = torch.permute(probs, (0, 2, 3, 1))  # shape: (grid_size**2, 28, 28, 16)
+    probs = torch.flatten(probs, end_dim=2) # flatten up to the penultimate dimension
+
+    x_samples = torch.multinomial(probs, 1).reshape(
+        -1, 28, 28, 1
+    )  # shape: (grid_size**2, 28, 28, 1)
+    x_samples = torch.permute(
+        x_samples, (0, 3, 1, 2)
+    )  # shape: (grid_size**2, 1, 28, 28)
+
+    img_grid = make_grid(x_samples, nrow=grid_size).float()
     #######################
     # END OF YOUR CODE    #
     #######################
 
     return img_grid
-
