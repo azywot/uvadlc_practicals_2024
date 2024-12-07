@@ -129,7 +129,7 @@ class CNNDecoder(nn.Module):
                 padding=1,
                 stride=2,
             ),
-            # nn.Tanh() # Output between -1 and 1 # TODO: double check if needed 
+            # nn.Tanh() # used in AE but does not apply for the probablistic estimation
         )
         #######################
         # END OF YOUR CODE    #

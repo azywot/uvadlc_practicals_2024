@@ -79,7 +79,9 @@ def elbo_to_bpd(elbo, img_shape):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    bpd = elbo * np.log2(np.e) / np.prod(img_shape[1:])
+    total_dims = torch.prod(torch.tensor(img_shape[1:])).item()
+
+    bpd = elbo * torch.log2(torch.exp(torch.tensor(1.0))) / total_dims
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -116,14 +118,14 @@ def visualize_manifold(decoder, grid_size=20):
 
     z = torch.distributions.Normal(0, 1).icdf(
         percentiles
-    )  # TODO: check if this is correct
+    )  # checked with the TA that it's ok to use torch.distributions.Normal here
     z1, z2 = torch.meshgrid([z, z])
     z_grid = torch.stack([z1.flatten(), z2.flatten()], dim=-1) # shape: (grid_size**2, 2)
 
     logits = decoder(z_grid) # shape: (grid_size**2, 16, 28, 28)
     probs = torch.nn.functional.softmax(logits, dim=1)
     probs = torch.permute(probs, (0, 2, 3, 1))  # shape: (grid_size**2, 28, 28, 16)
-    probs = torch.flatten(probs, end_dim=2) # flatten up to the penultimate dimension
+    probs = probs.reshape(-1, 16) # shape: (grid_size**2*28*28, 16)
 
     x_samples = torch.multinomial(probs, 1).reshape(
         -1, 28, 28, 1

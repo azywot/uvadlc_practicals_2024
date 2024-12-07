@@ -73,8 +73,9 @@ class VAE(pl.LightningModule):
         mean, log_std = self.encoder(imgs)
         z = sample_reparameterize(mean, torch.exp(log_std))
 
-        x_hat = self.decoder(z)
-        L_rec = F.cross_entropy(x_hat, imgs.squeeze(), reduction="sum") / imgs.shape[0]
+        x_hat = self.decoder(z) # shape: (B, C, H, W)
+        L_rec = F.cross_entropy(x_hat, imgs.squeeze(dim=1), reduction="none") # shape: (B, H, W)
+        L_rec = torch.sum(L_rec, dim=(1, 2)).mean()
         L_reg = torch.mean(KLD(mean, log_std))
         elbo = L_rec + L_reg
         bpd = elbo_to_bpd(elbo, imgs.shape)
@@ -100,7 +101,8 @@ class VAE(pl.LightningModule):
         logits = self.decoder(z)
         probs = F.softmax(logits, dim=1)
         B, C, H, W = probs.shape
-        probs = probs.permute(0, 2, 3, 1).reshape(-1, C)  # shape: (B, H, W, C)
+        probs = probs.permute(0, 2, 3, 1) # shape: (B, H, W, C)
+        probs = probs.reshape(-1, C) # shape: (B*H*W, C)
         x_samples = torch.multinomial(probs, 1).reshape(-1, H, W, 1) # shape: (B, H, W, 1)
         x_samples = x_samples.permute(0, 3, 1, 2)  # shape: (B, 1, H, W)
         #######################
@@ -116,10 +118,11 @@ class VAE(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # Make use of the forward function, and add logging statements
         L_rec, L_reg, bpd = self.forward(batch[0])
-        self.log("train_reconstruction_loss", L_rec, on_step=False, on_epoch=True)
-        self.log("train_regularization_loss", L_reg, on_step=False, on_epoch=True)
-        self.log("train_ELBO", L_rec + L_reg, on_step=False, on_epoch=True)
-        self.log("train_bpd", bpd, on_step=False, on_epoch=True)
+        # NOTE: on_step changed to True
+        self.log("train_reconstruction_loss", L_rec, on_step=True, on_epoch=True)
+        self.log("train_regularization_loss", L_reg, on_step=True, on_epoch=True)
+        self.log("train_ELBO", L_rec + L_reg, on_step=True, on_epoch=True)
+        self.log("train_bpd", bpd, on_step=True, on_epoch=True)
 
         return bpd
 
