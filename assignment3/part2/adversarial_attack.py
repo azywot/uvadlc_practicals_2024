@@ -49,8 +49,19 @@ def fgsm_loss(model, criterion, inputs, labels, defense_args, return_preds = Tru
     # Hint: the inputs are used in two different forward passes,
     # so you need to make sure those don't clash
     original_outputs = model(inputs)
-    perturbed_outputs = model(fgsm_attack(inputs, inputs.grad, epsilon))
-    loss = alpha * criterion(original_outputs, labels) + (1 - alpha) * criterion(perturbed_outputs, labels)
+    original_loss = criterion(original_outputs, labels)
+
+    model.zero_grad()
+    original_loss.backward(retain_graph=True) # added
+
+    grad_sign = inputs.grad.sign()
+    perturbed_inputs = inputs + epsilon * grad_sign
+    perturbed_inputs = torch.clamp(perturbed_inputs, -2, 2)
+
+    perturbed_outputs = model(perturbed_inputs)
+
+    perturbed_loss = criterion(perturbed_outputs, labels)
+    loss = alpha * original_loss + (1 - alpha) * perturbed_loss
     if return_preds:
         _, preds = torch.max(original_outputs, 1)
         return loss, preds
