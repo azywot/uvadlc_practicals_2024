@@ -3,6 +3,7 @@ assignment1/data/*
 assignment2/part1/data/*
 assignment2/part2/logs/*
 assignment3/part1/VAE_logs/*
+*.out
 *.pth
 *.pyc
 *.png
