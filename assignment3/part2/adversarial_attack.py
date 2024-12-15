@@ -32,7 +32,7 @@ def fgsm_attack(image, data_grad, epsilon = 0.25):
     # Make sure values stay within valid range
     perturbed_image = image + epsilon * torch.sign(data_grad)
     perturbed_image = perturbed_image.detach()
-    perturbed_image = torch.clamp(perturbed_image, 0, 1)
+    perturbed_image = torch.clamp(perturbed_image, -2, 2)
     return perturbed_image
 
 
@@ -105,7 +105,7 @@ def pgd_attack(model, data, target, criterion, args):
                 )
                 
                 # ensure the perturbed data remains within the valid range
-                perturbed_data = torch.clamp(perturbed_data, 0, 1)
+                perturbed_data = torch.clamp(perturbed_data, -2, 2)
     return perturbed_data
 
 
